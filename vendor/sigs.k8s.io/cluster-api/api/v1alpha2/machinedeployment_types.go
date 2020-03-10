@@ -27,6 +27,19 @@ const (
 	// Replace the old MachineSet by new one using rolling update
 	// i.e. gradually scale down the old MachineSet and scale up the new one.
 	RollingUpdateMachineDeploymentStrategyType MachineDeploymentStrategyType = "RollingUpdate"
+
+	// RevisionAnnotation is the revision annotation of a machine deployment's machine sets which records its rollout sequence
+	RevisionAnnotation = "machinedeployment.clusters.k8s.io/revision"
+	// RevisionHistoryAnnotation maintains the history of all old revisions that a machine set has served for a machine deployment.
+	RevisionHistoryAnnotation = "machinedeployment.clusters.k8s.io/revision-history"
+	// DesiredReplicasAnnotation is the desired replicas for a machine deployment recorded as an annotation
+	// in its machine sets. Helps in separating scaling events from the rollout process and for
+	// determining if the new machine set for a deployment is really saturated.
+	DesiredReplicasAnnotation = "machinedeployment.clusters.k8s.io/desired-replicas"
+	// MaxReplicasAnnotation is the maximum replicas a deployment can have at a given point, which
+	// is machinedeployment.spec.replicas + maxSurge. Used by the underlying machine sets to estimate their
+	// proportions in case the deployment has surge replicas.
+	MaxReplicasAnnotation = "machinedeployment.clusters.k8s.io/max-replicas"
 )
 
 // ANCHOR: MachineDeploymentSpec
@@ -113,7 +126,7 @@ type MachineRollingUpdateDeployment struct {
 	// that the total number of machines available at all times
 	// during the update is at least 70% of desired machines.
 	// +optional
-	MaxUnavailable *intstr.IntOrString `json:"maxUnavailable,omitempty" protobuf:"bytes,1,opt,name=maxUnavailable"`
+	MaxUnavailable *intstr.IntOrString `json:"maxUnavailable,omitempty"`
 
 	// The maximum number of machines that can be scheduled above the
 	// desired number of machines.
@@ -129,7 +142,7 @@ type MachineRollingUpdateDeployment struct {
 	// be scaled up further, ensuring that total number of machines running
 	// at any time during the update is at most 130% of desired machines.
 	// +optional
-	MaxSurge *intstr.IntOrString `json:"maxSurge,omitempty" protobuf:"bytes,2,opt,name=maxSurge"`
+	MaxSurge *intstr.IntOrString `json:"maxSurge,omitempty"`
 }
 
 // ANCHOR_END: MachineRollingUpdateDeployment
@@ -140,7 +153,7 @@ type MachineRollingUpdateDeployment struct {
 type MachineDeploymentStatus struct {
 	// The generation observed by the deployment controller.
 	// +optional
-	ObservedGeneration int64 `json:"observedGeneration,omitempty" protobuf:"varint,1,opt,name=observedGeneration"`
+	ObservedGeneration int64 `json:"observedGeneration,omitempty"`
 
 	// Selector is the same as the label selector but in the string format to avoid introspection
 	// by clients. The string will be in the same format as the query-param syntax.
@@ -151,21 +164,21 @@ type MachineDeploymentStatus struct {
 	// Total number of non-terminated machines targeted by this deployment
 	// (their labels match the selector).
 	// +optional
-	Replicas int32 `json:"replicas,omitempty" protobuf:"varint,2,opt,name=replicas"`
+	Replicas int32 `json:"replicas,omitempty"`
 
 	// Total number of non-terminated machines targeted by this deployment
 	// that have the desired template spec.
 	// +optional
-	UpdatedReplicas int32 `json:"updatedReplicas,omitempty" protobuf:"varint,3,opt,name=updatedReplicas"`
+	UpdatedReplicas int32 `json:"updatedReplicas,omitempty"`
 
 	// Total number of ready machines targeted by this deployment.
 	// +optional
-	ReadyReplicas int32 `json:"readyReplicas,omitempty" protobuf:"varint,7,opt,name=readyReplicas"`
+	ReadyReplicas int32 `json:"readyReplicas,omitempty"`
 
 	// Total number of available machines (ready for at least minReadySeconds)
 	// targeted by this deployment.
 	// +optional
-	AvailableReplicas int32 `json:"availableReplicas,omitempty" protobuf:"varint,4,opt,name=availableReplicas"`
+	AvailableReplicas int32 `json:"availableReplicas,omitempty"`
 
 	// Total number of unavailable machines targeted by this deployment.
 	// This is the total number of machines that are still required for
@@ -173,14 +186,13 @@ type MachineDeploymentStatus struct {
 	// be machines that are running but not yet available or machines
 	// that still have not been created.
 	// +optional
-	UnavailableReplicas int32 `json:"unavailableReplicas,omitempty" protobuf:"varint,5,opt,name=unavailableReplicas"`
+	UnavailableReplicas int32 `json:"unavailableReplicas,omitempty"`
 }
 
 // ANCHOR_END: MachineDeploymentStatus
 
 // +kubebuilder:object:root=true
 // +kubebuilder:resource:path=machinedeployments,shortName=md,scope=Namespaced,categories=cluster-api
-// +kubebuilder:storageversion
 // +kubebuilder:subresource:status
 // +kubebuilder:subresource:scale:specpath=.spec.replicas,statuspath=.status.replicas,selectorpath=.status.selector
 

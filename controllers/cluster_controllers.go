@@ -18,13 +18,15 @@ package controllers
 
 import (
 	"context"
+	_ "encoding/base64"
 	"fmt"
-	"k8s.io/client-go/tools/record"
-	"time"
-
 	"github.com/go-logr/logr"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/client-go/tools/clientcmd"
+	_ "k8s.io/client-go/tools/clientcmd"
+	"k8s.io/client-go/tools/record"
 	clusterv1 "sigs.k8s.io/cluster-api/api/v1alpha2"
+	"time"
 
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -73,6 +75,7 @@ func (r *ClusterReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 
 		return ctrl.Result{}, client.IgnoreNotFound(err)
 	}
+
 	// Get secret from cluster namespace and name
 	log_s := r.Log.WithValues("Secret",req.Namespace)
 	log_s.Info("Get secret")
@@ -84,11 +87,14 @@ func (r *ClusterReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 		log_s.Error(err,"secret not exit")
 		return ctrl.Result{}, client.IgnoreNotFound(err)
 	}
-	var ca []byte
-	for _, v := range secret.Data{
-		ca = v
-	}
 
+	// load kube config
+	fg := secret.Data["value"]
+	config,err := clientcmd.Load(fg)
+	if err != nil {
+		log.Error(err,"Can not load kube-config")
+		return ctrl.Result{},nil
+	}
 	// Find and Create cluster-registry
 	log_c := r.Log.WithValues("Cluster-Registry",req.Namespace)
 	log_c.Info("Get Cluster-Registry")
@@ -96,10 +102,14 @@ func (r *ClusterReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 	req_c.Name = req.Name+"-cluster-registry"
 	req_c.Namespace = req.Namespace
 	clusterreg := &clusterregistry.Cluster{}
-	err := r.Client.Get(ctx,req_c.NamespacedName,clusterreg)
-	if err != nil{
+	errs := r.Client.Get(ctx,req_c.NamespacedName,clusterreg)
+	if errs != nil{
 		log_c.Info("Create Cluster-Registry")
-		clusterreg := CreateClusterRegistry(req_c.Name,req_c.Namespace,ca,cluster)
+		clusterreg := CreateClusterRegistry(req_c.Name,
+			req_c.Namespace,
+			cluster,
+			config.Clusters[cluster.Name].CertificateAuthorityData,
+			config.Clusters[cluster.Name].Server)
 		err := r.Client.Create(ctx,clusterreg)
 		if err != nil{
 			log_c.Error(err,"Create Cluster-Registry fail")
@@ -110,7 +120,7 @@ func (r *ClusterReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 	return ctrl.Result{}, nil
 }
 
-func CreateClusterRegistry(name string, namespace string,ca []byte, cluster *clusterv1.Cluster) *clusterregistry.Cluster{
+func CreateClusterRegistry(name string, namespace string,cluster *clusterv1.Cluster,ca []byte,server string) *clusterregistry.Cluster{
 	cr := &clusterregistry.Cluster{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:         name,
@@ -124,7 +134,7 @@ func CreateClusterRegistry(name string, namespace string,ca []byte, cluster *clu
 				ServerEndpoints:    []clusterregistry.ServerAddressByClientCIDR{
 					{
 						ClientCIDR:    "0.0.0.0/0",
-						ServerAddress: "100.0.0.0",
+						ServerAddress: server,
 
 					},
 				},
@@ -142,20 +152,5 @@ func (r *ClusterReconciler) SetupWithManager(mgr ctrl.Manager, options controlle
     	Owns(&clusterregistry.Cluster{}).
 		Complete(r)
 	return nil
-	//controller, err := ctrl.NewControllerManagedBy(mgr).
-	//	For(&clusterv1.Cluster{}).
-	//	Watches(
-	//		&source.Kind{Type: &clusterv1.Secret{}},
-	//		&handler.EnqueueRequestsFromMapFunc{},
-	//	).
-	//	WithOptions(options).
-	//	Build(r)
-	//
-	//if err != nil {
-	//	return errors.Wrap(err, "failed setting up with a controller manager")
-	//}
-	//
-	//r.controller = controller
-	//r.recorder = mgr.GetEventRecorderFor("cluster-controller")
-	//return err
 }
+
