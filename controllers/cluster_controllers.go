@@ -19,11 +19,13 @@ package controllers
 import (
 	"context"
 	"fmt"
+	"k8s.io/client-go/tools/record"
 	"time"
 
 	"github.com/go-logr/logr"
 	"k8s.io/apimachinery/pkg/runtime"
 	clusterv1 "sigs.k8s.io/cluster-api/api/v1alpha2"
+
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller"
@@ -48,11 +50,11 @@ type ClusterReconciler struct {
 	Log    logr.Logger
 
 	scheme          *runtime.Scheme
+	recorder        record.EventRecorder
+	controller       controller.Controller
 }
 
-
 // +kubebuilder:rbac:groups=core,resources=events,verbs=get;list;watch;create;patch
-
 func (r *ClusterReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 	ctx := context.Background()
 	// Get cluster
@@ -71,8 +73,6 @@ func (r *ClusterReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 
 		return ctrl.Result{}, client.IgnoreNotFound(err)
 	}
-
-
 	// Get secret from cluster namespace and name
 	log_s := r.Log.WithValues("Secret",req.Namespace)
 	log_s.Info("Get secret")
@@ -87,7 +87,6 @@ func (r *ClusterReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 	var ca []byte
 	for _, v := range secret.Data{
 		ca = v
-		//log_s.Info(string(v))
 	}
 
 	// Find and Create cluster-registry
@@ -136,10 +135,27 @@ func CreateClusterRegistry(name string, namespace string,ca []byte, cluster *clu
 	return cr
 }
 
-
 func (r *ClusterReconciler) SetupWithManager(mgr ctrl.Manager, options controller.Options) error {
-	return ctrl.NewControllerManagedBy(mgr).
+    // cluster-api band with cluster-registry
+    return ctrl.NewControllerManagedBy(mgr).
 		For(&clusterv1.Cluster{}).
+    	Owns(&clusterregistry.Cluster{}).
 		Complete(r)
 	return nil
+	//controller, err := ctrl.NewControllerManagedBy(mgr).
+	//	For(&clusterv1.Cluster{}).
+	//	Watches(
+	//		&source.Kind{Type: &clusterv1.Secret{}},
+	//		&handler.EnqueueRequestsFromMapFunc{},
+	//	).
+	//	WithOptions(options).
+	//	Build(r)
+	//
+	//if err != nil {
+	//	return errors.Wrap(err, "failed setting up with a controller manager")
+	//}
+	//
+	//r.controller = controller
+	//r.recorder = mgr.GetEventRecorderFor("cluster-controller")
+	//return err
 }

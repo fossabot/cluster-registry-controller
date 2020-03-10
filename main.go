@@ -21,6 +21,7 @@ import (
 	"kubebuilder-without-api/controllers"
 	"os"
 	"sigs.k8s.io/controller-runtime/pkg/controller"
+	"sigs.k8s.io/controller-runtime/pkg/healthz"
 
 	"k8s.io/apimachinery/pkg/runtime"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
@@ -36,6 +37,9 @@ import (
 var (
 	scheme   = runtime.NewScheme()
 	setupLog = ctrl.Log.WithName("setup")
+	metricsAddr string
+	enableLeaderElection bool
+	healthAddr string
 )
 
 func init() {
@@ -47,18 +51,20 @@ func init() {
 	// +kubebuilder:scaffold:scheme
 }
 
+
+
 func main() {
-	var metricsAddr string
-	var enableLeaderElection bool
 	flag.StringVar(&metricsAddr, "metrics-addr", ":8080", "The address the metric endpoint binds to.")
 	flag.BoolVar(&enableLeaderElection, "enable-leader-election", false,
 		"Enable leader election for controller manager. Enabling this will ensure there is only one active controller manager.")
+	flag.StringVar(&healthAddr, "health-addr", ":9440",
+		"The address the health endpoint binds to.")
 	flag.Parse()
 
 	ctrl.SetLogger(zap.New(func(o *zap.Options) {
 		o.Development = true
 	}))
-
+    // create manager
 	mgr, err := ctrl.NewManager(ctrl.GetConfigOrDie(), ctrl.Options{
 		Scheme:             scheme,
 		MetricsBindAddress: metricsAddr,
@@ -69,17 +75,9 @@ func main() {
 		setupLog.Error(err, "unable to start manager")
 		os.Exit(1)
 	}
+	// health check
+	setupChecks(mgr)
 
-	// +kubebuilder:scaffold:builder
-	// manager for VirtualMachoine
-	//if err = (&controllers.VirtulMachineReconciler{
-	//	Client: mgr.GetClient(),
-	//	Log:    ctrl.Log.WithName("controllers").WithName("VirtulMachine"),
-	//	Scheme: mgr.GetScheme(),
-	//}).SetupWithManager(mgr); err != nil {
-	//	setupLog.Error(err, "unable to create controller", "controller", "VirtulMachine")
-	//	os.Exit(1)
-	//}
 	// manager for cluster
 	if err := (&controllers.ClusterReconciler{
 		Client: mgr.GetClient(),
@@ -95,6 +93,20 @@ func main() {
 		os.Exit(1)
 	}
 }
+
+// health check
+func setupChecks(mgr ctrl.Manager) {
+	if err := mgr.AddReadyzCheck("ping", healthz.Ping); err != nil {
+		setupLog.Error(err, "unable to create ready check")
+		os.Exit(1)
+	}
+
+	if err := mgr.AddHealthzCheck("ping", healthz.Ping); err != nil {
+		setupLog.Error(err, "unable to create health check")
+		os.Exit(1)
+	}
+}
+
 func concurrency(c int) controller.Options {
 	return controller.Options{MaxConcurrentReconciles: c}
 }

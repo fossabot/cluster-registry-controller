@@ -301,6 +301,7 @@ k8s.io/utils/pointer
 k8s.io/utils/trace
 # sigs.k8s.io/cluster-api v0.2.10
 sigs.k8s.io/cluster-api/api/v1alpha2
+sigs.k8s.io/cluster-api/controllers/external
 sigs.k8s.io/cluster-api/errors
 sigs.k8s.io/cluster-api/pkg/apis/deprecated/v1alpha1
 # sigs.k8s.io/controller-runtime v0.5.0
