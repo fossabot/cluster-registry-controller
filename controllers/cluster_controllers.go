@@ -26,8 +26,6 @@ import (
 	_ "k8s.io/client-go/tools/clientcmd"
 	"k8s.io/client-go/tools/record"
 	clusterv1 "sigs.k8s.io/cluster-api/api/v1alpha2"
-	"time"
-
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller"
@@ -39,11 +37,8 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
-const (
-	// deleteRequeueAfter is how long to wait before checking again to see if the cluster still has children during
-	// deletion.
-	deleteRequeueAfter = 5 * time.Second
-	phase = "provisioned"
+var (
+	Phase = "provisioned"
 )
 
 // ClusterReconciler reconciles a Cluster object
@@ -61,15 +56,14 @@ func (r *ClusterReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 	ctx := context.Background()
 	// Get cluster
 	log := r.Log.WithValues("Cluster", req.Namespace)
-	log.Info("Get Cluster")
+	log.Info("Get Cluster info")
 	cluster := &clusterv1.Cluster{}
 	if err := r.Client.Get(ctx, req.NamespacedName,cluster); err != nil{
 		log.Error(err,"unable to fetch Cluster")
 		return ctrl.Result{}, client.IgnoreNotFound(err)
 	}
 	status := cluster.Status.Phase
-	log.Info(status)
-	if status != phase{
+	if status != Phase{
 		err := fmt.Errorf("Cluster phase is: %s",status)
 		log.Error(err,"Cluster-api not ready")
 
@@ -78,7 +72,7 @@ func (r *ClusterReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 
 	// Get secret from cluster namespace and name
 	log_s := r.Log.WithValues("Secret",req.Namespace)
-	log_s.Info("Get secret")
+	log_s.Info("Get secret info")
 	var req_s ctrl.Request
 	req_s.Name = req.Name+"-kubeconfig"
 	req_s.Namespace = req.Namespace
@@ -97,14 +91,14 @@ func (r *ClusterReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 	}
 	// Find and Create cluster-registry
 	log_c := r.Log.WithValues("Cluster-Registry",req.Namespace)
-	log_c.Info("Get Cluster-Registry")
+	log_c.Info("Get Cluster-Registry info")
 	var req_c ctrl.Request
 	req_c.Name = req.Name+"-cluster-registry"
 	req_c.Namespace = req.Namespace
 	clusterreg := &clusterregistry.Cluster{}
 	errs := r.Client.Get(ctx,req_c.NamespacedName,clusterreg)
 	if errs != nil{
-		log_c.Info("Create Cluster-Registry")
+		log_c.Info("Create Cluster-Registry","ClusterRegistry",req_c.NamespacedName)
 		clusterreg := CreateClusterRegistry(req_c.Name,
 			req_c.Namespace,
 			cluster,
