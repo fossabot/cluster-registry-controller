@@ -1,2 +1,3 @@
 # kubebuilder-without-api
-use kubebuilder without init crd 
+This controller creates cluster-registry for k8s cluster.
+The information in cluster-registry comes from cluster-api.
