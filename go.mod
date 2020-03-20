@@ -1,4 +1,4 @@
-module kubebuilder-without-api
+module github.com/minsheng-fintech-corp-ltd/cluster-registry-controller
 
 go 1.13
 

@@ -18,7 +18,7 @@ package main
 
 import (
 	"flag"
-	"kubebuilder-without-api/controllers"
+	"github.com/minsheng-fintech-corp-ltd/cluster-registry-controller/controllers"
 	"os"
 	"sigs.k8s.io/controller-runtime/pkg/controller"
 	"sigs.k8s.io/controller-runtime/pkg/healthz"
