@@ -1,0 +1,12 @@
+language: go
+
+
+os:
+- linux
+
+go:
+  - 1.13.X
+
+
+script:
+  - make test
