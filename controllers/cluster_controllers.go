@@ -144,7 +144,7 @@ func (r *ClusterReconciler) SetupWithManager(mgr ctrl.Manager, options controlle
     return ctrl.NewControllerManagedBy(mgr).
 		For(&clusterv1.Cluster{}).
     	Owns(&clusterregistry.Cluster{}).
+		WithOptions(options).
 		Complete(r)
-	return nil
 }
 
