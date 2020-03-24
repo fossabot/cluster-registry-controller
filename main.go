@@ -18,55 +18,56 @@ package main
 
 import (
 	"flag"
-	"github.com/minsheng-fintech-corp-ltd/cluster-registry-controller/controllers"
+	"k8s.io/client-go/util/workqueue"
 	"os"
 	"sigs.k8s.io/controller-runtime/pkg/controller"
 	"sigs.k8s.io/controller-runtime/pkg/healthz"
 
+	clusterregistryv1alpha1 "github.com/minsheng-fintech-corp-ltd/cluster-registry-controller/api/v1alpha1"
+
+	"github.com/minsheng-fintech-corp-ltd/cluster-registry-controller/controllers"
+
 	"k8s.io/apimachinery/pkg/runtime"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
+	clusterv1alpha3 "sigs.k8s.io/cluster-api/api/v1alpha3"
 
 	_ "k8s.io/client-go/plugin/pkg/client/auth/gcp"
-	clusterregistry "k8s.io/cluster-registry/pkg/apis/clusterregistry/v1alpha1"
-	clusterv1alpha2 "sigs.k8s.io/cluster-api/api/v1alpha3"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
-	//cluster "github.com/kube"
 	// +kubebuilder:scaffold:imports
 )
 
 var (
 	scheme   = runtime.NewScheme()
 	setupLog = ctrl.Log.WithName("setup")
-	metricsAddr string
-	enableLeaderElection bool
-	healthAddr string
 )
 
 func init() {
 	_ = clientgoscheme.AddToScheme(scheme)
 
-	_ = clusterv1alpha2.AddToScheme(scheme)
-	_ = clusterregistry.AddToScheme(scheme)
-	//_ = cluster.AddToScheme(scheme)
+	_ = clusterregistryv1alpha1.AddToScheme(scheme)
+
+	_ = clusterv1alpha3.AddToScheme(scheme)
 	// +kubebuilder:scaffold:scheme
 }
 
-
-
 func main() {
+	var metricsAddr string
+	var enableLeaderElection bool
+	var concurrent int
+
 	flag.StringVar(&metricsAddr, "metrics-addr", ":8080", "The address the metric endpoint binds to.")
 	flag.BoolVar(&enableLeaderElection, "enable-leader-election", false,
 		"Enable leader election for controller manager. Enabling this will ensure there is only one active controller manager.")
-	flag.StringVar(&healthAddr, "health-addr", ":9440",
-		"The address the health endpoint binds to.")
-	flag.StringVar(&controllers.Phase,"cluster-phase","provisioned","The Phase of cluster-phase.")
+	flag.StringVar(&controllers.Phase,"cluster-phase","Provisioning","The Phase of cluster-phase.")
+	flag.IntVar(&concurrent,"concurrency number",5,"The number of controller run")
+
 	flag.Parse()
 
 	ctrl.SetLogger(zap.New(func(o *zap.Options) {
 		o.Development = true
 	}))
-    // create manager
+
 	mgr, err := ctrl.NewManager(ctrl.GetConfigOrDie(), ctrl.Options{
 		Scheme:             scheme,
 		MetricsBindAddress: metricsAddr,
@@ -77,23 +78,41 @@ func main() {
 		setupLog.Error(err, "unable to start manager")
 		os.Exit(1)
 	}
-	// health check
-	setupChecks(mgr)
 
-	// manager for cluster
-	if err := (&controllers.ClusterReconciler{
-		Client: mgr.GetClient(),
-		Log:    ctrl.Log.WithName("controllers").WithName("Cluster"),
-	}).SetupWithManager(mgr, concurrency(int(10))); err != nil {
-		setupLog.Error(err, "unable to create controller", "controller", "Cluster")
-		os.Exit(1)
-	}
+	setupChecks(mgr)
+	setupReconcilers(mgr,concurrent)
+
+	// +kubebuilder:scaffold:builder
 
 	setupLog.Info("starting manager")
 	if err := mgr.Start(ctrl.SetupSignalHandler()); err != nil {
 		setupLog.Error(err, "problem running manager")
 		os.Exit(1)
 	}
+}
+
+// set Reconciler
+func setupReconcilers(mgr ctrl.Manager,concurrent int) {
+
+	if err := (&controllers.ClusterReconciler{
+		Client: mgr.GetClient(),
+		Log:    ctrl.Log.WithName("controllers").WithName("Cluster-Registry"),
+		Scheme: mgr.GetScheme(),
+	}).SetupWithManager(mgr); err != nil {
+		setupLog.Error(err, "unable to create controller", "controller", "Cluster")
+		os.Exit(1)
+	}
+
+	if err := (&controllers.ClusterApiReconciler{
+		Client:         mgr.GetClient(),
+		Log:            ctrl.Log.WithName("controllers").WithName("Cluster-Api"),
+		Scheme:         mgr.GetScheme(),
+		Workqueue:      workqueue.NewRateLimitingQueue(workqueue.DefaultControllerRateLimiter()),
+	}).SetupWithManager(mgr, concurrency(concurrent)); err != nil {
+		setupLog.Error(err, "unable to create controller", "controller", "Cluster")
+		os.Exit(1)
+	}
+
 }
 
 // health check
