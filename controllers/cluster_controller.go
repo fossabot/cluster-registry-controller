@@ -42,12 +42,9 @@ type ClusterReconciler struct {
 
 func (r *ClusterReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 	ctx := context.Background()
-	log := r.Log.WithValues("cluster-registry", req.NamespacedName)
+	_ = r.Log.WithValues("cluster-registry", req.NamespacedName)
 	cluster := &clusterregistryv1alpha1.Cluster{}
-	if err := r.Client.Get(ctx, req.NamespacedName,cluster); err != nil{
-		log.Error(err, "unable fetch Cluster-Registry")
-		return ctrl.Result{}, client.IgnoreNotFound(err)
-	}
+	_ = r.Client.Get(ctx, req.NamespacedName,cluster)
 
 	return ctrl.Result{}, nil
 }

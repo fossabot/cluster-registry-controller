@@ -119,14 +119,15 @@ func (r *ClusterApiReconciler) ProcessQueue(ctx context.Context, cluster *cluste
 		if value, ok := key.(client.ObjectKey); ok{
 				if err := r.Client.Get(ctx, value, cluster); err != nil {
 					r.Log.Error(err, "unable fetch Cluster-Api")
-				}
-				status := cluster.Status.Phase
-				if status != Phase {
-					r.Log.Info("Cluster Api status not ready")
-					r.Workqueue.Add(value)
-				}else{
-					r.Log.Info("Cluster api status ready")
-					r.GetSecret(ctx,value,secret,cluster)
+				} else {
+					status := cluster.Status.Phase
+					if status != Phase {
+						r.Log.Info("Cluster Api status not ready")
+						r.Workqueue.Add(value)
+					} else {
+						r.Log.Info("Cluster api status ready")
+						r.GetSecret(ctx, value, secret, cluster)
+					}
 				}
 		}
 		time.Sleep(10 *time.Second)
