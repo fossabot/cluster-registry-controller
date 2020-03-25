@@ -17,13 +17,14 @@ limitations under the License.
 package main
 
 import (
+	clusterregistryv1alpha1 "github.com/minsheng-fintech-corp-ltd/cluster-registry-controller/api/v1alpha1"
+
 	"flag"
 	"k8s.io/client-go/util/workqueue"
 	"os"
 	"sigs.k8s.io/controller-runtime/pkg/controller"
 	"sigs.k8s.io/controller-runtime/pkg/healthz"
-
-	clusterregistryv1alpha1 "github.com/minsheng-fintech-corp-ltd/cluster-registry-controller/api/v1alpha1"
+	"time"
 
 	"github.com/minsheng-fintech-corp-ltd/cluster-registry-controller/controllers"
 
@@ -55,14 +56,17 @@ func main() {
 	var metricsAddr string
 	var enableLeaderElection bool
 	var concurrent int
+	var interval int
 
 	flag.StringVar(&metricsAddr, "metrics-addr", ":8080", "The address the metric endpoint binds to.")
 	flag.BoolVar(&enableLeaderElection, "enable-leader-election", false,
 		"Enable leader election for controller manager. Enabling this will ensure there is only one active controller manager.")
-	flag.StringVar(&controllers.Phase,"cluster-phase","Provisioning","The Phase of cluster-phase.")
-	flag.IntVar(&concurrent,"concurrency number",5,"The number of controller run")
+	flag.StringVar(&controllers.Phase,"cluster-phase","Provisioned","The Phase of cluster-phase.")
+	flag.IntVar(&concurrent,"concurrency number",10,"The number of controller run")
+	flag.IntVar(&interval,"Log interval time",5,"The time of log output")
 
 	flag.Parse()
+
 
 	ctrl.SetLogger(zap.New(func(o *zap.Options) {
 		o.Development = true
@@ -80,7 +84,7 @@ func main() {
 	}
 
 	setupChecks(mgr)
-	setupReconcilers(mgr,concurrent)
+	setupReconcilers(mgr,concurrent,interval)
 
 	// +kubebuilder:scaffold:builder
 
@@ -92,7 +96,7 @@ func main() {
 }
 
 // set Reconciler
-func setupReconcilers(mgr ctrl.Manager,concurrent int) {
+func setupReconcilers(mgr ctrl.Manager,concurrent int,interval int) {
 
 	if err := (&controllers.ClusterReconciler{
 		Client: mgr.GetClient(),
@@ -108,6 +112,7 @@ func setupReconcilers(mgr ctrl.Manager,concurrent int) {
 		Log:            ctrl.Log.WithName("controllers").WithName("Cluster-Api"),
 		Scheme:         mgr.GetScheme(),
 		Workqueue:      workqueue.NewRateLimitingQueue(workqueue.DefaultControllerRateLimiter()),
+		Interval:       time.Duration(interval),
 	}).SetupWithManager(mgr, concurrency(concurrent)); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "Cluster")
 		os.Exit(1)

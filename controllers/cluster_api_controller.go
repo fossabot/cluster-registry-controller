@@ -21,7 +21,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 )
 
-var Phase = "Providioneding"
+var Phase = "Providioned"
 
 type ClusterApiReconciler struct {
 	Client    client.Client
@@ -31,6 +31,9 @@ type ClusterApiReconciler struct {
 	controller controller.Controller
 	// Work queue
 	Workqueue workqueue.RateLimitingInterface
+
+	// Log interval time
+	Interval   time.Duration
 }
 
 // +kubebuilder:rbac:groups=core,resources=events,verbs=get;list;watch;create;patch
@@ -43,7 +46,8 @@ type ClusterApiReconciler struct {
 func (r *ClusterApiReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error){
 
 	ctx := context.Background()
-	defer r.Workqueue.ShutDown()
+
+	// defer r.Workqueue.ShutDown()
 
 	cluster := &clusterv1.Cluster{}
 	secret := &corev1.Secret{}
@@ -54,16 +58,39 @@ func (r *ClusterApiReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error){
 		log.Error(err, "unable fetch Cluster api")
 		return ctrl.Result{}, client.IgnoreNotFound(err)
 	}
+
+	//go r.reconcilStatus(ctx,req,cluster,secret)
+	//go r.reconcilSecret(ctx,req,secret,cluster)
+
+	log.Info("add queue")
 	r.Workqueue.Add(req.NamespacedName)
+	value, ok := r.Workqueue.Get()
+	r.ProcessQueue(ctx,cluster,secret,value,ok)
+	//for {
+	//	fmt.Printf("queue len; %d\n",r.Workqueue.Len())
+	//	if !ok {
+	//		key, status := value.(client.ObjectKey)
+	//		if status {
+	//			log.Info(key.String())
+	//		}
+	//	}
+	//	if err := r.Client.Get(ctx, req.NamespacedName,cluster); err != nil{
+	//		log.Error(err, "unable fetch Cluster api")
+	//		r.Workqueue.Done(value)
+	//		return ctrl.Result{}, client.IgnoreNotFound(err)
+	//	}
+	//	time.Sleep(5*time.Second)
+	//}
 
 	// Process workqueue
-	r.ProcessQueue(ctx,cluster,secret)
+	//log.Info("Add workqueue")
+	//r.ProcessQueue(ctx,cluster,secret)
 
 	return ctrl.Result{}, nil
 }
 
 // Create cluster registry
-func (r *ClusterApiReconciler) CreateClusterRegistry(ctx context.Context,value client.ObjectKey,cluster *clusterv1.Cluster,config *clientcmdapi.Config){
+func (r *ClusterApiReconciler) CreateClusterRegistry(ctx context.Context,value client.ObjectKey,cluster *clusterv1.Cluster,config *clientcmdapi.Config) error {
 
 	log := r.Log.WithValues("Cluster registry",value.Namespace)
 	var req ctrl.Request
@@ -81,57 +108,67 @@ func (r *ClusterApiReconciler) CreateClusterRegistry(ctx context.Context,value c
 		err := r.Client.Create(ctx,clusterreg)
 		if err != nil{
 			log.Error(err,"Create Cluster registry fail")
+			return err
 		}
 	}else{
 		log.Info("Cluster registry already exits")
+		return nil
 	}
+	return nil
 }
 
 // Get secret according cluster name and namespace
-func (r *ClusterApiReconciler) GetSecret(ctx context.Context,value client.ObjectKey,secret *corev1.Secret,cluster *clusterv1.Cluster){
-	log := r.Log.WithValues("Secret",value.Namespace)
+func (r *ClusterApiReconciler) GetSecret(ctx context.Context,value client.ObjectKey,secret *corev1.Secret,cluster *clusterv1.Cluster) error {
+	log := r.Log.WithValues("Secret namespace",value.Namespace)
 	var req ctrl.Request
 	req.Name = value.Name+"-kubeconfig"
 	req.Namespace = value.Namespace
 	if err := r.Client.Get(ctx,req.NamespacedName,secret); err != nil{
-		log.Info("secret not exit")
-		r.Workqueue.Add(value)
+		log.Info("secret not exit","secret",req.NamespacedName)
+		return err
 	} else {
 		fg := secret.Data["value"]
 		config,err := clientcmd.Load(fg)
 		if err != nil {
 			log.Error(err,"Can not load kube-config")
 		}
-		r.CreateClusterRegistry(ctx,value,cluster,config)
+		return r.CreateClusterRegistry(ctx,value,cluster,config)
 	}
+	return nil
 }
 
 // Process Work queue
-func (r *ClusterApiReconciler) ProcessQueue(ctx context.Context, cluster *clusterv1.Cluster,secret *corev1.Secret){
+func (r *ClusterApiReconciler) ProcessQueue(ctx context.Context, cluster *clusterv1.Cluster,secret *corev1.Secret,key interface{},status bool) (ctrl.Result, error){
+	log := r.Log.WithValues("namespace",cluster.Namespace)
 	for{
-		key, status := r.Workqueue.Get()
 		if status{
-			r.Log.Info("Cluster queue get element error")
-			return
+			log.Info("Cluster queue get element error")
+			return ctrl.Result{}, nil
 		}
-		r.Workqueue.Done(key)
 
-		if value, ok := key.(client.ObjectKey); ok{
-				if err := r.Client.Get(ctx, value, cluster); err != nil {
-					r.Log.Error(err, "unable fetch Cluster-Api")
-				} else {
-					status := cluster.Status.Phase
-					if status != Phase {
-						r.Log.Info("Cluster Api status not ready")
-						r.Workqueue.Add(value)
-					} else {
-						r.Log.Info("Cluster api status ready")
-						r.GetSecret(ctx, value, secret, cluster)
-					}
+		if value, ok := key.(client.ObjectKey); ok {
+			err := r.Client.Get(ctx,value,cluster)
+			if err != nil{
+				log.Error(err, "unable fetch cluster api")
+				r.Workqueue.Done(value)
+				return ctrl.Result{}, client.IgnoreNotFound(err)
+			}
+
+			status := cluster.Status.Phase
+			if status != Phase {
+				log.Info("Cluster api status not ready","cluster name:",cluster.Name)
+			} else {
+				log.Info("Cluster api status ready","cluster name:",cluster.Name)
+				err := r.GetSecret(ctx, value, secret, cluster)
+				if err == nil{
+					r.Workqueue.Done(value)
+					return ctrl.Result{},nil
 				}
+			}
 		}
-		time.Sleep(10 *time.Second)
-	}
+		time.Sleep(r.Interval *time.Second)
+		}
+	return ctrl.Result{}, nil
 }
 
 // Setup method for controller
