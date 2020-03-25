@@ -112,7 +112,6 @@ func (r *ClusterApiReconciler) GetSecret(ctx context.Context,value client.Object
 		}
 		return r.CreateClusterRegistry(ctx,value,cluster,config)
 	}
-	return nil
 }
 
 // Process Work queue
@@ -146,7 +145,6 @@ func (r *ClusterApiReconciler) ProcessQueue(ctx context.Context, cluster *cluste
 		}
 		time.Sleep(r.Interval *time.Second)
 		}
-	return ctrl.Result{}, nil
 }
 
 // Setup method for controller
