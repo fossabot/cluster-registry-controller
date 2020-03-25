@@ -59,32 +59,10 @@ func (r *ClusterApiReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error){
 		return ctrl.Result{}, client.IgnoreNotFound(err)
 	}
 
-	//go r.reconcilStatus(ctx,req,cluster,secret)
-	//go r.reconcilSecret(ctx,req,secret,cluster)
-
-	log.Info("add queue")
+	log.Info("Add WorkQueue")
 	r.Workqueue.Add(req.NamespacedName)
 	value, ok := r.Workqueue.Get()
 	r.ProcessQueue(ctx,cluster,secret,value,ok)
-	//for {
-	//	fmt.Printf("queue len; %d\n",r.Workqueue.Len())
-	//	if !ok {
-	//		key, status := value.(client.ObjectKey)
-	//		if status {
-	//			log.Info(key.String())
-	//		}
-	//	}
-	//	if err := r.Client.Get(ctx, req.NamespacedName,cluster); err != nil{
-	//		log.Error(err, "unable fetch Cluster api")
-	//		r.Workqueue.Done(value)
-	//		return ctrl.Result{}, client.IgnoreNotFound(err)
-	//	}
-	//	time.Sleep(5*time.Second)
-	//}
-
-	// Process workqueue
-	//log.Info("Add workqueue")
-	//r.ProcessQueue(ctx,cluster,secret)
 
 	return ctrl.Result{}, nil
 }
