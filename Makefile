@@ -1,6 +1,7 @@
 
+TAG ?= dev
 # Image URL to use all building/pushing image targets
-IMG ?= controller:latest
+IMG = mskj/cluster-registry-controller:${TAG}
 # Produce CRDs that work back to Kubernetes 1.11 (no version conversion)
 CRD_OPTIONS ?= "crd:trivialVersions=true"
 
@@ -15,7 +16,7 @@ all: manager
 
 # Run tests
 test: generate fmt vet manifests
-	go test ./... -coverprofile cover.out
+	source ./hack/fetch_ext_bins.sh; fetch_tools; setup_envs; go test ./... -coverprofile cover.out
 
 # Build manager binary
 manager: generate fmt vet
@@ -60,6 +61,7 @@ docker-build: test
 
 # Push the docker image
 docker-push:
+	echo "$DOCKER_PASSWORD" | docker login -u "$DOCKER_USERNAME" --password-stdin
 	docker push ${IMG}
 
 # find or download controller-gen

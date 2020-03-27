@@ -44,8 +44,8 @@ func (r *ClusterReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 	ctx := context.Background()
 	_ = r.Log.WithValues("cluster-registry", req.NamespacedName)
 	cluster := &clusterregistryv1alpha1.Cluster{}
-	_ = r.Client.Get(ctx, req.NamespacedName,cluster)//; err != nil{
-		//log.Error(err, "unable fetch Cluster-Registry")
+	_ = r.Client.Get(ctx, req.NamespacedName, cluster) //; err != nil{
+	//log.Error(err, "unable fetch Cluster-Registry")
 	//}
 
 	return ctrl.Result{}, nil
@@ -58,22 +58,21 @@ func (r *ClusterReconciler) SetupWithManager(mgr ctrl.Manager) error {
 }
 
 // Create cluster registry resource
-func CreateClusterRegistry(name string, namespace string,cluster *clusterv1.Cluster,ca []byte,server string) *clusterregistryv1alpha1.Cluster{
+func CreateClusterRegistry(name string, namespace string, cluster *clusterv1.Cluster, ca []byte, server string) *clusterregistryv1alpha1.Cluster {
 	cr := &clusterregistryv1alpha1.Cluster{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:         name,
-			Namespace:    namespace,
+			Name:      name,
+			Namespace: namespace,
 			OwnerReferences: []metav1.OwnerReference{
-				*metav1.NewControllerRef(cluster.GetObjectMeta(),cluster.GroupVersionKind()),
+				*metav1.NewControllerRef(cluster.GetObjectMeta(), cluster.GroupVersionKind()),
 			},
 		},
 		Spec: clusterregistryv1alpha1.ClusterSpec{
-			KubernetesAPIEndpoints:  clusterregistryv1alpha1.KubernetesAPIEndpoints{
-				ServerEndpoints:    []clusterregistryv1alpha1.ServerAddressByClientCIDR{
+			KubernetesAPIEndpoints: clusterregistryv1alpha1.KubernetesAPIEndpoints{
+				ServerEndpoints: []clusterregistryv1alpha1.ServerAddressByClientCIDR{
 					{
 						ClientCIDR:    "0.0.0.0/0",
 						ServerAddress: server,
-
 					},
 				},
 				CABundle: ca,
